@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	pg "github.com/pganalyze/pg_query_go/v6"
+
 	"github.com/stephenafamo/bob/clause"
 	"github.com/stephenafamo/bob/internal"
 )
@@ -181,16 +182,21 @@ func (w *walker) modSelectStatement(stmt *pg.Node_SelectStmt, info nodeInfo) {
 				int(limitInfo.start),
 				int(limitInfo.end)-1,
 				func(start, end int) error {
+					limitField, fetchField := "Limit", "Fetch"
+					if len(combines) > 0 {
+						limitField, fetchField = "CombinedLimit", "CombinedFetch"
+					}
+
 					switch stmt.SelectStmt.LimitOption {
 					case pg.LimitOption_LIMIT_OPTION_COUNT:
-						fmt.Fprintf(w.mods, "q.CombinedLimit.SetLimit(EXPR.subExpr(%d, %d))\n", start, end)
+						fmt.Fprintf(w.mods, "q.%s.SetLimit(EXPR.subExpr(%d, %d))\n", limitField, start, end)
 					case pg.LimitOption_LIMIT_OPTION_WITH_TIES:
 						w.imports = append(w.imports, []string{"github.com/stephenafamo/bob/clause"})
-						fmt.Fprintf(w.mods, `q.CombinedFetch.SetFetch(clause.Fetch{
+						fmt.Fprintf(w.mods, `q.%s.SetFetch(clause.Fetch{
 								Count: EXPR.subExpr(%d, %d),
 								WithTies: true,
 							})
-						`, start, end)
+						`, fetchField, start, end)
 					}
 					return nil
 				},
@@ -204,7 +210,11 @@ func (w *walker) modSelectStatement(stmt *pg.Node_SelectStmt, info nodeInfo) {
 				int(offsetInfo.start),
 				int(offsetInfo.end)-1,
 				func(start, end int) error {
-					fmt.Fprintf(w.mods, "q.CombinedOffset.SetOffset(EXPR.subExpr(%d, %d))\n", start, end)
+					offsetField := "Offset"
+					if len(combines) > 0 {
+						offsetField = "CombinedOffset"
+					}
+					fmt.Fprintf(w.mods, "q.%s.SetOffset(EXPR.subExpr(%d, %d))\n", offsetField, start, end)
 					return nil
 				},
 			)...,
@@ -217,7 +227,11 @@ func (w *walker) modSelectStatement(stmt *pg.Node_SelectStmt, info nodeInfo) {
 				int(orderInfo.start),
 				int(orderInfo.end)-1,
 				func(start, end int) error {
-					fmt.Fprintf(w.mods, "q.CombinedOrder.AppendOrder(EXPR.subExpr(%d, %d))\n", start, end)
+					orderField := "OrderBy"
+					if len(combines) > 0 {
+						orderField = "CombinedOrder"
+					}
+					fmt.Fprintf(w.mods, "q.%s.AppendOrder(EXPR.subExpr(%d, %d))\n", orderField, start, end)
 					return nil
 				},
 			)...,
